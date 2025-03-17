@@ -18,7 +18,6 @@ export default function VerifyPage() {
       const result = await verifyUser(nim, token);
       if (result.success) {
         setMessage('Verifikasi berhasil. Anda dapat melanjutkan ke voting.');
-        // Redirect ke halaman voting
         router.push('/vote');
       } else {
         setError('Verifikasi gagal. Token tidak valid.');
