@@ -1,161 +1,188 @@
 'use client';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabaseClient';
 
-import { useEffect, useState } from 'react';
-import { fetchCandidates, addCandidate, deleteCandidate, updateCandidate, fetchSettings, updateSettings } from '@/utils/admin';
-
-// Define proper types
 interface Candidate {
   id: string;
-  name: string;
-  position: string;
-}
-
-interface Settings {
-  id: string;
-  allowed_nim_prefix: string;
+  nama_partai: string;
+  ketua: string;
+  wakil: string;
+  visi: string;
+  misi: string;
+  created_at: string;
 }
 
 export default function AdminPage() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [newCandidate, setNewCandidate] = useState({ name: '', position: 'ketua' });
   const [nimPrefix, setNimPrefix] = useState('');
-  const [message, setMessage] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [newCandidate, setNewCandidate] = useState<Partial<Candidate>>({
+    nama_partai: '',
+    ketua: '',
+    wakil: '',
+    visi: '',
+    misi: ''
+  });
 
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        const candidateData = await fetchCandidates();
-        setCandidates(candidateData);
-        
-        const settings = await fetchSettings();
-        setNimPrefix(settings?.allowed_nim_prefix || '');
-      } catch (error: any) {
-        setMessage(`Error: ${error.message}`);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadData();
-  }, [message]);
+    fetchCandidates();
+  }, []);
 
-  const handleAddCandidate = async () => {
-    try {
-      if (!newCandidate.name) {
-        setMessage('Nama kandidat tidak boleh kosong');
-        return;
-      }
-      
-      await addCandidate(newCandidate);
-      setNewCandidate({ name: '', position: 'ketua' });
-      
-      // Refresh the candidate list
-      const candidateData = await fetchCandidates();
-      setCandidates(candidateData);
-      
-      setMessage('Kandidat berhasil ditambahkan.');
-    } catch (error: any) {
-      setMessage(`Error: ${error.message}`);
-    }
+  const fetchCandidates = async () => {
+    const { data } = await supabase.from('candidates').select('*');
+    setCandidates(data || []);
   };
 
-  const handleDeleteCandidate = async (id: string) => {
-    try {
-      await deleteCandidate(id);
-      
-      // Refresh the candidate list
-      const candidateData = await fetchCandidates();
-      setCandidates(candidateData);
-      
-      setMessage('Kandidat berhasil dihapus.');
-    } catch (error: any) {
-      setMessage(`Error: ${error.message}`);
-    }
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setNewCandidate({
+      ...newCandidate,
+      [name]: value
+    });
   };
 
-  const handleUpdateSettings = async () => {
-    try {
-      await updateSettings(nimPrefix);
-      setMessage('Prefix NIM berhasil diperbarui.');
-    } catch (error: any) {
-      setMessage(`Error: ${error.message}`);
-    }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await addCandidate(newCandidate);
+    // Reset form after submission
+    setNewCandidate({
+      nama_partai: '',
+      ketua: '',
+      wakil: '',
+      visi: '',
+      misi: ''
+    });
   };
 
-  if (loading) {
-    return <div className="p-6">Loading...</div>;
-  }
+  const addCandidate = async (candidate: Partial<Candidate>) => {
+    await supabase.from('candidates').insert([candidate]);
+    fetchCandidates();
+  };
+
+  const deleteCandidate = async (id: string) => {
+    await supabase.from('candidates').delete().eq('id', id);
+    fetchCandidates();
+  };
+
+  const updateNimPrefix = async () => {
+    await supabase.from('settings').update({ allowed_nim_prefix: nimPrefix }).eq('id', 'settings-id');
+  };
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl mb-4">Manajemen Kandidat</h1>
-
-      <div className="mb-6">
-        <input
-          type="text"
-          placeholder="Nama Kandidat"
-          value={newCandidate.name}
-          onChange={(e) => setNewCandidate({ ...newCandidate, name: e.target.value })}
-          className="border p-2 mr-2"
-        />
-        <select
-          value={newCandidate.position}
-          onChange={(e) => setNewCandidate({ ...newCandidate, position: e.target.value })}
-          className="border p-2 mr-2"
-        >
-          <option value="ketua">Ketua</option>
-          <option value="wakil">Wakil</option>
-        </select>
-        <button 
-          onClick={handleAddCandidate} 
-          className="p-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-        >
-          Tambah Kandidat
-        </button>
-      </div>
-
-      <h2 className="text-xl mb-2">Daftar Kandidat</h2>
-      {candidates.length === 0 ? (
-        <p className="text-gray-500">Belum ada kandidat</p>
-      ) : (
-        <ul className="space-y-2">
-          {candidates.map((candidate: Candidate) => (
-            <li key={candidate.id} className="border p-2 mb-2 flex justify-between items-center">
-              <span>{candidate.name} - {candidate.position}</span>
+      <h2 className="text-xl font-bold mb-4">Manajemen Kandidat</h2>
+      
+      {/* Candidate list */}
+      <div className="mb-8">
+        <h3 className="text-lg font-semibold mb-2">Daftar Kandidat</h3>
+        {candidates.length === 0 ? (
+          <p>Belum ada kandidat</p>
+        ) : (
+          candidates.map((candidate) => (
+            <div key={candidate.id} className="border p-3 mb-2 rounded">
+              <p className="font-semibold">{candidate.nama_partai}</p>
+              <p>Ketua: {candidate.ketua} | Wakil: {candidate.wakil}</p>
               <button 
-                onClick={() => handleDeleteCandidate(candidate.id)} 
-                className="p-1 bg-red-500 text-white rounded hover:bg-red-600"
+                onClick={() => deleteCandidate(candidate.id)} 
+                className="bg-red-500 text-white px-3 py-1 rounded mt-2"
               >
                 Hapus
               </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <h2 className="text-xl mt-6 mb-2">Pengaturan Prefix NIM</h2>
-      <div className="flex items-center">
-        <input
-          type="text"
-          value={nimPrefix}
-          onChange={(e) => setNimPrefix(e.target.value)}
-          className="border p-2 mr-2"
-          placeholder="Contoh: 2022"
-        />
-        <button 
-          onClick={handleUpdateSettings} 
-          className="p-2 bg-green-500 text-white rounded hover:bg-green-600"
-        >
-          Perbarui Prefix
-        </button>
+            </div>
+          ))
+        )}
       </div>
 
-      {message && (
-        <div className={`mt-4 p-2 rounded ${message.includes('Error') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-          {message}
+      {/* Add candidate form */}
+      <div className="mb-8 p-4 border rounded">
+        <h3 className="text-lg font-semibold mb-2">Tambah Kandidat Baru</h3>
+        <form onSubmit={handleSubmit}>
+          <div className="mb-3">
+            <label className="block mb-1">Nama Partai</label>
+            <input
+              type="text"
+              name="nama_partai"
+              value={newCandidate.nama_partai}
+              onChange={handleInputChange}
+              className="w-full p-2 border rounded"
+              required
+            />
+          </div>
+          
+          <div className="mb-3">
+            <label className="block mb-1">Nama Ketua</label>
+            <input
+              type="text"
+              name="ketua"
+              value={newCandidate.ketua}
+              onChange={handleInputChange}
+              className="w-full p-2 border rounded"
+              required
+            />
+          </div>
+          
+          <div className="mb-3">
+            <label className="block mb-1">Nama Wakil</label>
+            <input
+              type="text"
+              name="wakil"
+              value={newCandidate.wakil}
+              onChange={handleInputChange}
+              className="w-full p-2 border rounded"
+              required
+            />
+          </div>
+          
+          <div className="mb-3">
+            <label className="block mb-1">Visi</label>
+            <textarea
+              name="visi"
+              value={newCandidate.visi}
+              onChange={handleInputChange}
+              className="w-full p-2 border rounded"
+              rows={3}
+              required
+            />
+          </div>
+          
+          <div className="mb-3">
+            <label className="block mb-1">Misi</label>
+            <textarea
+              name="misi"
+              value={newCandidate.misi}
+              onChange={handleInputChange}
+              className="w-full p-2 border rounded"
+              rows={3}
+              required
+            />
+          </div>
+          
+          <button 
+            type="submit" 
+            className="bg-blue-500 text-white px-4 py-2 rounded"
+          >
+            Tambah Kandidat
+          </button>
+        </form>
+      </div>
+
+      {/* NIM Prefix settings */}
+      <div className="p-4 border rounded">
+        <h2 className="text-lg font-semibold mb-2">Pengaturan Prefix NIM</h2>
+        <div className="flex items-center">
+          <input 
+            value={nimPrefix} 
+            onChange={(e) => setNimPrefix(e.target.value)} 
+            placeholder="Prefix NIM" 
+            className="p-2 border rounded mr-2"
+          />
+          <button 
+            onClick={updateNimPrefix}
+            className="bg-green-500 text-white px-4 py-2 rounded"
+          >
+            Update Prefix
+          </button>
         </div>
-      )}
+      </div>
     </div>
   );
 }
